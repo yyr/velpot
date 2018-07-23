@@ -1,23 +1,12 @@
 #!/usr/bin/env python
-"""
-Compute streamfunction and velocity potential from the long-term-mean
-flow.
 
-This example uses the standard interface.
-
-Additional requirements for this example:
-
-* netCDF4 (http://unidata.github.io/netcdf4-python/)
-* matplotlib (http://matplotlib.org/)
-* cartopy (http://scitools.org.uk/cartopy/)
-
-"""
 import cartopy.crs as ccrs
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from cartopy.util import add_cyclic_point
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from netCDF4 import Dataset
+from scipy.io.netcdf import netcdf_file
 
 from windspharm.standard import VectorWind
 from windspharm.tools import prep_data, recover_data, order_latdim
@@ -25,13 +14,10 @@ from windspharm.examples import example_data_path
 
 mpl.rcParams['mathtext.default'] = 'regular'
 
-# Read zonal and meridional wind components from file using the netCDF4
-# module. The components are defined on pressure levels and are in separate
-# files.
 ncu = Dataset('uv.nc', 'r')
 u = ncu.variables['u'][:][:]
 v = ncu.variables['v'][:][:]
-time = ncu.variables['time'][:]
+times = ncu.variables['time'][:]
 lons = ncu.variables['longitude'][:]
 lats = ncu.variables['latitude'][:]
 ncu.close()
@@ -60,59 +46,42 @@ w = VectorWind(uwnd, vwnd)
 # Compute the streamfunction and velocity potential. Also use the bundled
 # tools to re-shape the outputs to the 4D shape of the wind components as they
 # were read off files.
-sf, vp = w.sfvp()
-sf = recover_data(sf, uwnd_info)
-vp = recover_data(vp, uwnd_info)
+sf_arr, vp_arr = w.sfvp()
+sf_arr = recover_data(sf_arr, uwnd_info)
+vp_arr = recover_data(vp_arr, uwnd_info)
+# print(vp_arr.dtype.name)
+# time.dtype
+# lons.dtype
+# lats.dtype
+# exit()
+# write output
+filename = netcdf_file('./tmp_netcdf.nc', 'w')
 
-# Pick out the field for December and add a cyclic point (the cyclic point is
-# for plotting purposes).
-sf_dec, lons_c = add_cyclic_point(sf[11], lons)
-vp_dec, lons_c = add_cyclic_point(vp[11], lons)
+# Dimensions
+filename.createDimension('time', len(times))
+filename.createDimension('lat', len(lats))
+filename.createDimension('lon', len(lons))
 
-# Plot streamfunction.
-ax1 = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
-clevs = [-120, -100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100, 120]
-sf_fill = ax1.contourf(
-    lons_c,
-    lats,
-    sf_dec * 1e-06,
-    clevs,
-    transform=ccrs.PlateCarree(),
-    cmap=plt.cm.RdBu_r,
-    extend='both')
-ax1.coastlines()
-ax1.gridlines()
-ax1.set_xticks([0, 60, 120, 180, 240, 300, 359.99], crs=ccrs.PlateCarree())
-ax1.set_yticks([-90, -60, -30, 0, 30, 60, 90], crs=ccrs.PlateCarree())
-lon_formatter = LongitudeFormatter(
-    zero_direction_label=True, number_format='.0f')
-lat_formatter = LatitudeFormatter()
-ax1.xaxis.set_major_formatter(lon_formatter)
-ax1.yaxis.set_major_formatter(lat_formatter)
-plt.colorbar(sf_fill, orientation='horizontal')
-plt.title('Streamfunction ($10^6$m$^2$s$^{-1}$)', fontsize=16)
+sf = filename.createVariable('sf', 'f4', (
+    'time',
+    'lat',
+    'lon',
+))
 
-# Plot velocity potential.
-plt.figure()
-ax2 = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
-clevs = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10]
-vp_fill = ax2.contourf(
-    lons_c,
-    lats,
-    vp_dec * 1e-06,
-    clevs,
-    transform=ccrs.PlateCarree(),
-    cmap=plt.cm.RdBu_r,
-    extend='both')
-ax2.coastlines()
-ax2.gridlines()
-ax2.set_xticks([0, 60, 120, 180, 240, 300, 359.99], crs=ccrs.PlateCarree())
-ax2.set_yticks([-90, -60, -30, 0, 30, 60, 90], crs=ccrs.PlateCarree())
-lon_formatter = LongitudeFormatter(
-    zero_direction_label=True, number_format='.0f')
-lat_formatter = LatitudeFormatter()
-ax2.xaxis.set_major_formatter(lon_formatter)
-ax2.yaxis.set_major_formatter(lat_formatter)
-plt.colorbar(vp_fill, orientation='horizontal')
-plt.title('Velocity Potential ($10^6$m$^2$s$^{-1}$)', fontsize=16)
-plt.show()
+vp = filename.createVariable('vp', 'f4', (
+    'time',
+    'lat',
+    'lon',
+))
+
+lat = filename.createVariable('lat', 'f4', ('lat', ))
+lon = filename.createVariable('lon', 'f4', ('lon', ))
+time = filename.createVariable('time', 'i', ('time', ))
+
+time[:] = times
+lat[:] = lats
+lon[:] = lons
+sf[:, :, :] = sf_arr[:, :, :]
+vp[:, :, :] = vp_arr[:, :, :]
+
+filename.close()
