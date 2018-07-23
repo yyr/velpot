@@ -55,7 +55,7 @@ vp_arr = recover_data(vp_arr, uwnd_info)
 # lats.dtype
 # exit()
 # write output
-filename = netcdf_file('./tmp_netcdf.nc', 'w')
+filename = netcdf_file('./sfvp.nc', 'w')
 
 # Dimensions
 filename.createDimension('time', len(times))
